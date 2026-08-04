@@ -1,0 +1,797 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>IoT Shield — File Threat Scanner</title>
+  <link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Rajdhani:wght@400;600;700&display=swap" rel="stylesheet"/>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg: #030a0f;
+      --surface: #071520;
+      --border: #0d3348;
+      --accent: #00e5ff;
+      --accent2: #00ff9d;
+      --danger: #ff3d71;
+      --warn: #ffaa00;
+      --text: #c8e6f5;
+      --muted: #3a6a85;
+      --font-mono: 'Share Tech Mono', monospace;
+      --font-ui: 'Rajdhani', sans-serif;
+    }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--font-ui);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      overflow-x: hidden;
+    }
+
+    /* Grid background */
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background-image:
+        linear-gradient(rgba(0,229,255,0.03) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(0,229,255,0.03) 1px, transparent 1px);
+      background-size: 40px 40px;
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    /* Glow orbs */
+    body::after {
+      content: '';
+      position: fixed;
+      top: -200px; left: 50%;
+      transform: translateX(-50%);
+      width: 600px; height: 600px;
+      background: radial-gradient(circle, rgba(0,229,255,0.06) 0%, transparent 70%);
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    .container {
+      position: relative;
+      z-index: 1;
+      width: 100%;
+      max-width: 780px;
+      padding: 40px 20px 80px;
+    }
+
+    /* Header */
+    header {
+      text-align: center;
+      margin-bottom: 50px;
+    }
+
+    .logo-row {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 14px;
+      margin-bottom: 10px;
+    }
+
+    .shield-icon {
+      width: 48px; height: 48px;
+      position: relative;
+    }
+
+    .shield-icon svg { width: 100%; height: 100%; }
+
+    h1 {
+      font-size: 2.6rem;
+      font-weight: 700;
+      letter-spacing: 4px;
+      text-transform: uppercase;
+      color: #fff;
+    }
+
+    h1 span { color: var(--accent); }
+
+    .tagline {
+      font-family: var(--font-mono);
+      font-size: 0.78rem;
+      color: var(--muted);
+      letter-spacing: 2px;
+      margin-top: 6px;
+    }
+
+    .status-bar {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      margin-top: 16px;
+      font-family: var(--font-mono);
+      font-size: 0.72rem;
+      color: var(--accent2);
+    }
+
+    .status-dot {
+      width: 7px; height: 7px;
+      border-radius: 50%;
+      background: var(--accent2);
+      animation: pulse 2s ease-in-out infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; box-shadow: 0 0 6px var(--accent2); }
+      50% { opacity: 0.4; box-shadow: none; }
+    }
+
+    /* Upload panel */
+    .panel {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      padding: 36px;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .panel::before {
+      content: '';
+      position: absolute;
+      top: 0; left: 0; right: 0;
+      height: 2px;
+      background: linear-gradient(90deg, transparent, var(--accent), transparent);
+    }
+
+    .panel-label {
+      font-family: var(--font-mono);
+      font-size: 0.7rem;
+      color: var(--muted);
+      letter-spacing: 3px;
+      text-transform: uppercase;
+      margin-bottom: 24px;
+    }
+
+    /* Drop zone */
+    .drop-zone {
+      border: 1px dashed var(--border);
+      border-radius: 4px;
+      padding: 48px 24px;
+      text-align: center;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      position: relative;
+      background: rgba(0,229,255,0.01);
+    }
+
+    .drop-zone:hover, .drop-zone.drag-over {
+      border-color: var(--accent);
+      background: rgba(0,229,255,0.04);
+    }
+
+    .drop-zone input[type="file"] {
+      position: absolute;
+      inset: 0;
+      opacity: 0;
+      cursor: pointer;
+      width: 100%;
+      height: 100%;
+    }
+
+    .upload-icon {
+      font-size: 2.5rem;
+      margin-bottom: 14px;
+      display: block;
+      filter: drop-shadow(0 0 12px rgba(0,229,255,0.4));
+    }
+
+    .drop-title {
+      font-size: 1.15rem;
+      font-weight: 600;
+      letter-spacing: 1px;
+      color: #fff;
+      margin-bottom: 6px;
+    }
+
+    .drop-sub {
+      font-family: var(--font-mono);
+      font-size: 0.72rem;
+      color: var(--muted);
+    }
+
+    .file-selected {
+      margin-top: 20px;
+      display: none;
+      align-items: center;
+      gap: 10px;
+      background: rgba(0,229,255,0.06);
+      border: 1px solid rgba(0,229,255,0.2);
+      border-radius: 4px;
+      padding: 12px 16px;
+    }
+
+    .file-selected.show { display: flex; }
+
+    .file-icon { font-size: 1.3rem; }
+
+    .file-info { flex: 1; min-width: 0; }
+
+    .file-name {
+      font-weight: 600;
+      color: var(--accent);
+      font-size: 0.95rem;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .file-size {
+      font-family: var(--font-mono);
+      font-size: 0.68rem;
+      color: var(--muted);
+    }
+
+    /* Scan button */
+    .scan-btn {
+      width: 100%;
+      margin-top: 24px;
+      padding: 16px;
+      background: transparent;
+      border: 1px solid var(--accent);
+      color: var(--accent);
+      font-family: var(--font-ui);
+      font-size: 1rem;
+      font-weight: 700;
+      letter-spacing: 4px;
+      text-transform: uppercase;
+      cursor: pointer;
+      border-radius: 4px;
+      transition: all 0.2s ease;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .scan-btn::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: var(--accent);
+      transform: scaleX(0);
+      transform-origin: left;
+      transition: transform 0.2s ease;
+      z-index: 0;
+    }
+
+    .scan-btn:hover::before { transform: scaleX(1); }
+    .scan-btn:hover { color: var(--bg); }
+    .scan-btn span { position: relative; z-index: 1; }
+    .scan-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+    .scan-btn:disabled::before { transform: scaleX(0); }
+
+    /* Progress / scanning state */
+    .scanning-overlay {
+      display: none;
+      flex-direction: column;
+      align-items: center;
+      gap: 16px;
+      padding: 32px 0 8px;
+    }
+
+    .scanning-overlay.show { display: flex; }
+
+    .scan-ring {
+      width: 64px; height: 64px;
+      border: 2px solid var(--border);
+      border-top-color: var(--accent);
+      border-right-color: var(--accent);
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    .scan-log {
+      font-family: var(--font-mono);
+      font-size: 0.72rem;
+      color: var(--muted);
+      text-align: center;
+      line-height: 1.8;
+    }
+
+    .scan-log .active { color: var(--accent); }
+
+    /* Results */
+    #results { margin-top: 28px; display: none; }
+    #results.show { display: block; }
+
+    .verdict-banner {
+      padding: 20px 24px;
+      border-radius: 4px;
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      margin-bottom: 20px;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .verdict-banner::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      opacity: 0.08;
+    }
+
+    .verdict-banner.clean { border: 1px solid var(--accent2); }
+    .verdict-banner.clean::before { background: var(--accent2); }
+    .verdict-banner.malicious { border: 1px solid var(--danger); }
+    .verdict-banner.malicious::before { background: var(--danger); }
+    .verdict-banner.suspicious { border: 1px solid var(--warn); }
+    .verdict-banner.suspicious::before { background: var(--warn); }
+
+    .verdict-icon { font-size: 2.2rem; }
+
+    .verdict-text { flex: 1; }
+
+    .verdict-label {
+      font-size: 1.4rem;
+      font-weight: 700;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+    }
+
+    .clean .verdict-label { color: var(--accent2); }
+    .malicious .verdict-label { color: var(--danger); }
+    .suspicious .verdict-label { color: var(--warn); }
+
+    .verdict-sub {
+      font-family: var(--font-mono);
+      font-size: 0.72rem;
+      color: var(--muted);
+      margin-top: 4px;
+    }
+
+    /* Stats row */
+    .stats-row {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 12px;
+      margin-bottom: 20px;
+    }
+
+    .stat-box {
+      background: rgba(255,255,255,0.02);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      padding: 16px;
+      text-align: center;
+    }
+
+    .stat-val {
+      font-size: 1.8rem;
+      font-weight: 700;
+      font-family: var(--font-mono);
+      line-height: 1;
+    }
+
+    .stat-val.danger { color: var(--danger); }
+    .stat-val.warn { color: var(--warn); }
+    .stat-val.safe { color: var(--accent2); }
+
+    .stat-label {
+      font-size: 0.7rem;
+      color: var(--muted);
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      margin-top: 6px;
+    }
+
+    /* Hashes */
+    .section-title {
+      font-family: var(--font-mono);
+      font-size: 0.68rem;
+      color: var(--muted);
+      letter-spacing: 3px;
+      text-transform: uppercase;
+      margin-bottom: 10px;
+    }
+
+    .hash-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-family: var(--font-mono);
+      font-size: 0.72rem;
+      margin-bottom: 20px;
+    }
+
+    .hash-table td {
+      padding: 8px 12px;
+      border-bottom: 1px solid rgba(13,51,72,0.6);
+    }
+
+    .hash-table td:first-child {
+      color: var(--muted);
+      width: 70px;
+      text-transform: uppercase;
+    }
+
+    .hash-table td:last-child {
+      color: var(--accent);
+      word-break: break-all;
+    }
+
+    /* Detections */
+    .detection-list {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .detection-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 8px 12px;
+      background: rgba(255,61,113,0.05);
+      border: 1px solid rgba(255,61,113,0.15);
+      border-radius: 3px;
+      font-size: 0.82rem;
+    }
+
+    .det-engine { color: var(--text); font-weight: 600; }
+    .det-result { font-family: var(--font-mono); font-size: 0.68rem; color: var(--danger); }
+
+    .no-detections {
+      font-family: var(--font-mono);
+      font-size: 0.78rem;
+      color: var(--accent2);
+      text-align: center;
+      padding: 16px;
+      border: 1px solid rgba(0,255,157,0.15);
+      border-radius: 4px;
+      background: rgba(0,255,157,0.03);
+    }
+
+    .source-badge {
+      display: inline-block;
+      font-family: var(--font-mono);
+      font-size: 0.62rem;
+      padding: 3px 8px;
+      border-radius: 2px;
+      background: rgba(0,229,255,0.08);
+      border: 1px solid rgba(0,229,255,0.2);
+      color: var(--accent);
+      letter-spacing: 1px;
+      margin-bottom: 14px;
+    }
+
+    /* Scan again */
+    .scan-again-btn {
+      width: 100%;
+      margin-top: 20px;
+      padding: 12px;
+      background: transparent;
+      border: 1px solid var(--border);
+      color: var(--muted);
+      font-family: var(--font-ui);
+      font-size: 0.85rem;
+      font-weight: 600;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      cursor: pointer;
+      border-radius: 4px;
+      transition: all 0.2s ease;
+    }
+
+    .scan-again-btn:hover { border-color: var(--accent); color: var(--accent); }
+
+    /* Footer */
+    footer {
+      position: relative; z-index: 1;
+      text-align: center;
+      font-family: var(--font-mono);
+      font-size: 0.65rem;
+      color: var(--muted);
+      padding: 20px;
+      letter-spacing: 1px;
+    }
+
+    .error-box {
+      background: rgba(255,61,113,0.07);
+      border: 1px solid rgba(255,61,113,0.25);
+      border-radius: 4px;
+      padding: 16px;
+      font-family: var(--font-mono);
+      font-size: 0.78rem;
+      color: var(--danger);
+      display: none;
+      margin-top: 16px;
+    }
+    .error-box.show { display: block; }
+
+    @media (max-width: 500px) {
+      h1 { font-size: 1.8rem; }
+      .panel { padding: 24px 18px; }
+      .stats-row { grid-template-columns: repeat(3,1fr); gap: 8px; }
+      .stat-val { font-size: 1.4rem; }
+    }
+  </style>
+</head>
+<body>
+
+<div class="container">
+  <header>
+    <div class="logo-row">
+      <div class="shield-icon">
+        <svg viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <path d="M24 4L6 12V24C6 33.6 14.1 42.5 24 45C33.9 42.5 42 33.6 42 24V12L24 4Z" stroke="#00e5ff" stroke-width="1.5" fill="rgba(0,229,255,0.06)"/>
+          <path d="M16 24L21 29L32 18" stroke="#00ff9d" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+      </div>
+      <h1>IoT <span>Shield</span></h1>
+    </div>
+    <div class="tagline">// CLOUD-BASED FILE THREAT INTELLIGENCE SCANNER</div>
+    <div class="status-bar">
+      <span class="status-dot"></span>
+      <span>VIRUSTOTAL ENGINE CONNECTED &nbsp;|&nbsp; IOT SECURITY MODULE ACTIVE</span>
+    </div>
+  </header>
+
+  <div class="panel">
+    <div class="panel-label">&gt;_ UPLOAD FILE FOR ANALYSIS</div>
+
+    <div class="drop-zone" id="dropZone">
+      <input type="file" id="fileInput" />
+      <span class="upload-icon">⬆</span>
+      <div class="drop-title">Drop file here or click to browse</div>
+      <div class="drop-sub">Supports any file type — checked against 70+ AV engines via VirusTotal</div>
+    </div>
+
+    <div class="file-selected" id="fileSelected">
+      <span class="file-icon">📄</span>
+      <div class="file-info">
+        <div class="file-name" id="fileName">—</div>
+        <div class="file-size" id="fileSize">—</div>
+      </div>
+    </div>
+
+    <div class="error-box" id="errorBox"></div>
+
+    <button class="scan-btn" id="scanBtn" disabled onclick="startScan()">
+      <span>⬡ &nbsp; Scan File</span>
+    </button>
+
+    <div class="scanning-overlay" id="scanningOverlay">
+      <div class="scan-ring"></div>
+      <div class="scan-log" id="scanLog">
+        <div id="log1">Computing file hashes (MD5 / SHA1 / SHA256)...</div>
+        <div id="log2"></div>
+        <div id="log3"></div>
+      </div>
+    </div>
+
+    <!-- Results -->
+    <div id="results">
+      <div class="verdict-banner" id="verdictBanner">
+        <span class="verdict-icon" id="verdictIcon"></span>
+        <div class="verdict-text">
+          <div class="verdict-label" id="verdictLabel"></div>
+          <div class="verdict-sub" id="verdictSub"></div>
+        </div>
+      </div>
+
+      <div class="source-badge" id="sourceBadge"></div>
+
+      <div class="stats-row">
+        <div class="stat-box">
+          <div class="stat-val danger" id="statMalicious">0</div>
+          <div class="stat-label">Malicious</div>
+        </div>
+        <div class="stat-box">
+          <div class="stat-val warn" id="statSuspicious">0</div>
+          <div class="stat-label">Suspicious</div>
+        </div>
+        <div class="stat-box">
+          <div class="stat-val safe" id="statTotal">0</div>
+          <div class="stat-label">Engines</div>
+        </div>
+      </div>
+
+      <div class="section-title">// FILE HASHES</div>
+      <table class="hash-table" id="hashTable"></table>
+
+      <div class="section-title">// ENGINE DETECTIONS</div>
+      <div id="detectionList"></div>
+
+      <button class="scan-again-btn" onclick="resetUI()">↩ Scan Another File</button>
+    </div>
+  </div>
+</div>
+
+<footer>
+  IOT SHIELD v1.0 &nbsp;|&nbsp; POWERED BY VIRUSTOTAL CLOUD API &nbsp;|&nbsp; MINI PROJECT — IOT & CLOUD SECURITY
+</footer>
+
+<script>
+  const fileInput = document.getElementById('fileInput');
+  const dropZone = document.getElementById('dropZone');
+  const fileSelected = document.getElementById('fileSelected');
+  const fileName = document.getElementById('fileName');
+  const fileSize = document.getElementById('fileSize');
+  const scanBtn = document.getElementById('scanBtn');
+  const scanningOverlay = document.getElementById('scanningOverlay');
+  const results = document.getElementById('results');
+  const errorBox = document.getElementById('errorBox');
+
+  let selectedFile = null;
+
+  function formatSize(bytes) {
+    if (bytes < 1024) return bytes + ' B';
+    if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+    return (bytes / (1024 * 1024)).toFixed(2) + ' MB';
+  }
+
+  fileInput.addEventListener('change', (e) => {
+    const file = e.target.files[0];
+    if (file) selectFile(file);
+  });
+
+  dropZone.addEventListener('dragover', (e) => {
+    e.preventDefault();
+    dropZone.classList.add('drag-over');
+  });
+
+  dropZone.addEventListener('dragleave', () => dropZone.classList.remove('drag-over'));
+
+  dropZone.addEventListener('drop', (e) => {
+    e.preventDefault();
+    dropZone.classList.remove('drag-over');
+    const file = e.dataTransfer.files[0];
+    if (file) selectFile(file);
+  });
+
+  function selectFile(file) {
+    selectedFile = file;
+    fileName.textContent = file.name;
+    fileSize.textContent = formatSize(file.size) + ' · ' + (file.type || 'unknown type');
+    fileSelected.classList.add('show');
+    scanBtn.disabled = false;
+    results.classList.remove('show');
+    errorBox.classList.remove('show');
+  }
+
+  async function startScan() {
+    if (!selectedFile) return;
+
+    // Show scanning state
+    scanBtn.style.display = 'none';
+    scanningOverlay.classList.add('show');
+    results.classList.remove('show');
+    errorBox.classList.remove('show');
+
+    const log1 = document.getElementById('log1');
+    const log2 = document.getElementById('log2');
+    const log3 = document.getElementById('log3');
+
+    log1.className = 'active';
+    log2.textContent = '';
+    log3.textContent = '';
+
+    setTimeout(() => {
+      log1.className = '';
+      log2.textContent = 'Querying VirusTotal cloud database...';
+      log2.className = 'active';
+    }, 1000);
+
+    setTimeout(() => {
+      log2.className = '';
+      log3.textContent = 'Awaiting engine analysis results...';
+      log3.className = 'active';
+    }, 3000);
+
+    const formData = new FormData();
+    formData.append('file', selectedFile);
+
+    try {
+      const response = await fetch('/scan', { method: 'POST', body: formData });
+      const data = await response.json();
+
+      scanningOverlay.classList.remove('show');
+
+      if (data.error) {
+        showError(data.error);
+        scanBtn.style.display = '';
+        scanBtn.disabled = false;
+        return;
+      }
+
+      showResults(data);
+
+    } catch (err) {
+      scanningOverlay.classList.remove('show');
+      showError('Connection error: ' + err.message);
+      scanBtn.style.display = '';
+      scanBtn.disabled = false;
+    }
+  }
+
+  function showError(msg) {
+    errorBox.textContent = '⚠ ERROR: ' + msg;
+    errorBox.classList.add('show');
+  }
+
+  function showResults(data) {
+    const { filename, hashes, source, scan } = data;
+
+    // Verdict banner
+    const banner = document.getElementById('verdictBanner');
+    const icon = document.getElementById('verdictIcon');
+    const label = document.getElementById('verdictLabel');
+    const sub = document.getElementById('verdictSub');
+
+    banner.className = 'verdict-banner ' + scan.verdict;
+
+    if (scan.verdict === 'clean') {
+      icon.textContent = '✔';
+      label.textContent = 'File is Clean';
+      sub.textContent = `No threats detected · ${scan.total_engines} engines scanned`;
+    } else if (scan.verdict === 'malicious') {
+      icon.textContent = '✘';
+      label.textContent = 'Malicious File Detected';
+      sub.textContent = `Flagged by ${scan.malicious} engine(s) as malicious`;
+    } else {
+      icon.textContent = '⚠';
+      label.textContent = 'Suspicious File';
+      sub.textContent = `Flagged by ${scan.suspicious} engine(s) as suspicious`;
+    }
+
+    // Source badge
+    document.getElementById('sourceBadge').textContent =
+      source === 'hash_lookup' ? '⚡ RESULT FROM HASH LOOKUP (INSTANT)' : '🔍 RESULT FROM FRESH SCAN';
+
+    // Stats
+    document.getElementById('statMalicious').textContent = scan.malicious;
+    document.getElementById('statSuspicious').textContent = scan.suspicious;
+    document.getElementById('statTotal').textContent = scan.total_engines;
+
+    // Hash table
+    const ht = document.getElementById('hashTable');
+    ht.innerHTML = `
+      <tr><td>MD5</td><td>${hashes.md5}</td></tr>
+      <tr><td>SHA1</td><td>${hashes.sha1}</td></tr>
+      <tr><td>SHA256</td><td>${hashes.sha256}</td></tr>
+    `;
+
+    // Detections
+    const dl = document.getElementById('detectionList');
+    if (scan.detections.length === 0) {
+      dl.innerHTML = '<div class="no-detections">✓ No engine flagged this file as malicious or suspicious</div>';
+    } else {
+      dl.innerHTML = '<div class="detection-list">' +
+        scan.detections.map(d => `
+          <div class="detection-item">
+            <span class="det-engine">${d.engine}</span>
+            <span class="det-result">${d.result || d.category}</span>
+          </div>
+        `).join('') +
+      '</div>';
+    }
+
+    results.classList.add('show');
+  }
+
+  function resetUI() {
+    selectedFile = null;
+    fileInput.value = '';
+    fileSelected.classList.remove('show');
+    scanBtn.disabled = true;
+    scanBtn.style.display = '';
+    results.classList.remove('show');
+    errorBox.classList.remove('show');
+  }
+</script>
+</body>
+</html>
